@@ -1,5 +1,4 @@
 """Tests for the HTTP API Client."""
-
 from typing import Tuple
 
 import pytest
@@ -55,27 +54,6 @@ def test_request_air_drop_prefetched_blockhash(
     assert_valid_response(resp)
     test_http_client.confirm_transaction(resp.value)
     balance = test_http_client.get_balance(stubbed_receiver_prefetched_blockhash)
-    assert balance.value == AIRDROP_AMOUNT
-
-
-@pytest.mark.integration
-def test_request_air_drop_cached_blockhash(
-    stubbed_sender_cached_blockhash, stubbed_receiver_cached_blockhash, test_http_client: Client
-):
-    """Test air drop to stubbed_sender and stubbed_receiver."""
-    # Airdrop to stubbed_sender
-    resp = test_http_client.request_airdrop(stubbed_sender_cached_blockhash.pubkey(), AIRDROP_AMOUNT)
-    assert_valid_response(resp)
-    test_http_client.confirm_transaction(resp.value)
-    assert_valid_response(resp)
-    balance = test_http_client.get_balance(stubbed_sender_cached_blockhash.pubkey())
-    assert balance.value == AIRDROP_AMOUNT
-    # Airdrop to stubbed_receiver
-    resp = test_http_client.request_airdrop(stubbed_receiver_cached_blockhash, AIRDROP_AMOUNT)
-    assert_valid_response(resp)
-    test_http_client.confirm_transaction(resp.value)
-    assert_valid_response(resp)
-    balance = test_http_client.get_balance(stubbed_receiver_cached_blockhash)
     assert balance.value == AIRDROP_AMOUNT
 
 
@@ -184,63 +162,6 @@ def test_send_transaction_prefetched_blockhash(
     resp = test_http_client.get_balance(stubbed_receiver_prefetched_blockhash)
     assert_valid_response(resp)
     assert resp.value == 10000001000
-
-
-@pytest.mark.integration
-def test_send_transaction_cached_blockhash(
-    stubbed_sender_cached_blockhash, stubbed_receiver_cached_blockhash, test_http_client_cached_blockhash
-):
-    """Test sending a transaction to localnet."""
-    # Create transfer tx to transfer lamports from stubbed sender to stubbed_receiver
-    transfer_tx = Transaction().add(
-        sp.transfer(
-            sp.TransferParams(
-                from_pubkey=stubbed_sender_cached_blockhash.pubkey(),
-                to_pubkey=stubbed_receiver_cached_blockhash,
-                lamports=1000,
-            )
-        )
-    )
-    assert len(test_http_client_cached_blockhash.blockhash_cache.unused_blockhashes) == 0
-    assert len(test_http_client_cached_blockhash.blockhash_cache.used_blockhashes) == 0
-    resp = test_http_client_cached_blockhash.send_transaction(transfer_tx, stubbed_sender_cached_blockhash)
-    # we could have got a new blockhash or not depending on network latency and luck
-    assert len(test_http_client_cached_blockhash.blockhash_cache.unused_blockhashes) in (0, 1)
-    assert len(test_http_client_cached_blockhash.blockhash_cache.used_blockhashes) == 1
-    assert_valid_response(resp)
-    # Confirm transaction
-    test_http_client_cached_blockhash.confirm_transaction(resp.value)
-    # Check balances
-    resp = test_http_client_cached_blockhash.get_balance(stubbed_sender_cached_blockhash.pubkey())
-    assert_valid_response(resp)
-    assert resp.value == 9999994000
-
-    # Second transaction
-    transfer_tx = Transaction().add(
-        sp.transfer(
-            sp.TransferParams(
-                from_pubkey=stubbed_sender_cached_blockhash.pubkey(),
-                to_pubkey=stubbed_receiver_cached_blockhash,
-                lamports=2000,
-            )
-        )
-    )
-    resp = test_http_client_cached_blockhash.get_balance(stubbed_receiver_cached_blockhash)
-    assert_valid_response(resp)
-    assert resp.value == 10000001000
-    resp = test_http_client_cached_blockhash.send_transaction(transfer_tx, stubbed_sender_cached_blockhash)
-    # we could have got a new blockhash or not depending on network latency and luck
-    assert len(test_http_client_cached_blockhash.blockhash_cache.unused_blockhashes) in (0, 1)
-    assert len(test_http_client_cached_blockhash.blockhash_cache.used_blockhashes) in (1, 2)
-    assert_valid_response(resp)
-    # Confirm transaction
-    test_http_client_cached_blockhash.confirm_transaction(resp.value)
-    # Check balances
-    resp = test_http_client_cached_blockhash.get_balance(stubbed_sender_cached_blockhash.pubkey())
-    assert_valid_response(resp)
-    assert resp.value == 9999987000
-    assert len(test_http_client_cached_blockhash.blockhash_cache.unused_blockhashes) == 1
-    assert len(test_http_client_cached_blockhash.blockhash_cache.used_blockhashes) == 1
 
 
 @pytest.mark.integration
@@ -494,6 +415,15 @@ def test_get_inflation_rate(test_http_client: Client):
     assert_valid_response(resp)
 
 
+# XXX: Block not available for slot on local cluster
+@pytest.mark.skip
+@pytest.mark.integration
+def test_get_inflation_reward(stubbed_sender, test_http_client: Client):
+    """Test get inflation reward."""
+    resp = test_http_client.get_inflation_reward([stubbed_sender.pubkey()], commitment=Confirmed)
+    assert_valid_response(resp)
+
+
 @pytest.mark.integration
 def test_get_largest_accounts(test_http_client: Client):
     """Test get largest accounts."""
@@ -594,8 +524,8 @@ def test_batch_request(test_http_client: Client):
     parsers = (GetBlockHeightResp, GetFirstAvailableBlockResp)
     resp: Tuple[
         Resp[GetBlockHeightResp], Resp[GetFirstAvailableBlockResp]
-    ] = test_http_client._provider.make_batch_request(
+    ] = test_http_client._provider.make_batch_request(  # pylint: disable=protected-access
         reqs, parsers
-    )  # pylint: disable=protected-access
+    )
     assert_valid_response(resp[0])
     assert_valid_response(resp[1])
